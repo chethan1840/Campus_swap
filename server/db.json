@@ -1,0 +1,195 @@
+{
+  "users": [
+    {
+      "id": "mv6g78t4be0s",
+      "name": "chethan",
+      "email": "chethan123@gmail.com",
+      "bio": "CS final year student, loves trading textbooks",
+      "password": "$2a$08$apRPRAoGnelP7a8WfR02v.TRPz81y4qPv3MCWz0wjyb63yat1vDIe"
+    },
+    {
+      "id": "seed_user_001",
+      "name": "Priya Sharma",
+      "email": "priya.sharma@campus.edu",
+      "bio": "2nd year ECE, selling last semester books",
+      "password": "$2a$08$apRPRAoGnelP7a8WfR02v.TRPz81y4qPv3MCWz0wjyb63yat1vDIe"
+    },
+    {
+      "id": "seed_user_002",
+      "name": "Arjun Mehta",
+      "email": "arjun.mehta@campus.edu",
+      "bio": "3rd year Mech Eng student",
+      "password": "$2a$08$apRPRAoGnelP7a8WfR02v.TRPz81y4qPv3MCWz0wjyb63yat1vDIe"
+    },
+    {
+      "id": "seed_user_003",
+      "name": "Sneha Reddy",
+      "email": "sneha.reddy@campus.edu",
+      "bio": "MBA student, business & economics books",
+      "password": "$2a$08$apRPRAoGnelP7a8WfR02v.TRPz81y4qPv3MCWz0wjyb63yat1vDIe"
+    },
+    {
+      "id": "seed_user_004",
+      "name": "Rahul Nair",
+      "email": "rahul.nair@campus.edu",
+      "bio": "Physics Hons, loves science books",
+      "password": "$2a$08$apRPRAoGnelP7a8WfR02v.TRPz81y4qPv3MCWz0wjyb63yat1vDIe"
+    }
+  ],
+  "resources": [
+    {
+      "id": "book_001",
+      "title": "Introduction to Algorithms (CLRS) — 4th Edition",
+      "description": "The classic algorithms textbook by Cormen, Leiserson, Rivest & Stein. Covers sorting, graphs, dynamic programming and more. Lightly highlighted, spine intact.",
+      "category": "Books",
+      "genre": "Computer Science",
+      "author": "Cormen, Leiserson, Rivest & Stein",
+      "condition": "Good",
+      "rating": 5,
+      "status": "available",
+      "ownerId": "seed_user_001"
+    },
+    {
+      "id": "book_002",
+      "title": "Operating System Concepts — Galvin (10th Ed)",
+      "description": "Dinosaur Book by Galvin, Gagne & Silberschatz. Covers processes, threads, memory management, file systems. Perfect for OS exams.",
+      "category": "Books",
+      "genre": "Computer Science",
+      "author": "Silberschatz, Galvin & Gagne",
+      "condition": "Like New",
+      "rating": 4,
+      "status": "available",
+      "ownerId": "seed_user_002"
+    },
+    {
+      "id": "book_003",
+      "title": "Engineering Mathematics — B.S. Grewal",
+      "description": "Essential maths reference for all engineering branches. Covers calculus, differential equations, linear algebra, probability. No writing inside.",
+      "category": "Books",
+      "genre": "Mathematics",
+      "author": "B.S. Grewal",
+      "condition": "Good",
+      "rating": 5,
+      "status": "available",
+      "ownerId": "seed_user_001"
+    },
+    {
+      "id": "book_004",
+      "title": "Principles of Economics — Mankiw (8th Ed)",
+      "description": "Mankiw's classic economics textbook. Microeconomics, macroeconomics, supply-demand, fiscal & monetary policy. A few sticky notes inside.",
+      "category": "Books",
+      "genre": "Economics",
+      "author": "N. Gregory Mankiw",
+      "condition": "Fair",
+      "rating": 4,
+      "status": "available",
+      "ownerId": "seed_user_003"
+    },
+    {
+      "id": "book_005",
+      "title": "University Physics — Young & Freedman (14th Ed)",
+      "description": "Comprehensive physics for science & engineering students. Mechanics, thermodynamics, EM waves, optics, modern physics. Includes practice problems.",
+      "category": "Books",
+      "genre": "Physics",
+      "author": "Young & Freedman",
+      "condition": "Good",
+      "rating": 5,
+      "status": "available",
+      "ownerId": "seed_user_004"
+    },
+    {
+      "id": "book_006",
+      "title": "Database System Concepts — Korth (7th Ed)",
+      "description": "Silberschatz, Korth & Sudarshan. Covers ER models, SQL, transactions, concurrency, NoSQL. Excellent condition, used for one semester.",
+      "category": "Books",
+      "genre": "Computer Science",
+      "author": "Silberschatz, Korth & Sudarshan",
+      "condition": "Like New",
+      "rating": 4,
+      "status": "available",
+      "ownerId": "seed_user_002"
+    },
+    {
+      "id": "book_007",
+      "title": "Organic Chemistry — Morrison & Boyd",
+      "description": "Classic organic chemistry for undergrads. Mechanisms, reactions, spectroscopy. Some pencil marks on early chapters but otherwise clean.",
+      "category": "Books",
+      "genre": "Chemistry",
+      "author": "Morrison & Boyd",
+      "condition": "Fair",
+      "rating": 4,
+      "status": "available",
+      "ownerId": "seed_user_003"
+    },
+    {
+      "id": "book_008",
+      "title": "The Lean Startup — Eric Ries",
+      "description": "Practical guide for entrepreneurs and product managers. Build-measure-learn cycles, validated learning and lean thinking. Great read for MBA students.",
+      "category": "Books",
+      "genre": "Business",
+      "author": "Eric Ries",
+      "condition": "Like New",
+      "rating": 5,
+      "status": "available",
+      "ownerId": "seed_user_003"
+    },
+    {
+      "id": "book_009",
+      "title": "Artificial Intelligence: A Modern Approach — Russell & Norvig",
+      "description": "AIMA 4th edition. Search, logic, planning, ML, perception, robotics. The definitive AI textbook. Minimal highlights.",
+      "category": "Books",
+      "genre": "Computer Science",
+      "author": "Russell & Norvig",
+      "condition": "Good",
+      "rating": 5,
+      "status": "available",
+      "ownerId": "seed_user_004"
+    },
+    {
+      "id": "book_010",
+      "title": "Signals and Systems — Oppenheim & Willsky",
+      "description": "Continuous and discrete time signals, Fourier, Laplace and Z-transforms. Perfect for ECE 3rd sem. A few solved problems marked.",
+      "category": "Books",
+      "genre": "Electronics",
+      "author": "Oppenheim & Willsky",
+      "condition": "Good",
+      "rating": 4,
+      "status": "available",
+      "ownerId": "seed_user_001"
+    },
+    {
+      "id": "book_011",
+      "title": "Atomic Habits — James Clear",
+      "description": "Life-changing book on building good habits. Great for any student. Very clean, read once.",
+      "category": "Books",
+      "genre": "Self Help",
+      "author": "James Clear",
+      "condition": "Like New",
+      "rating": 5,
+      "status": "available",
+      "ownerId": "seed_user_002"
+    },
+    {
+      "id": "book_012",
+      "title": "Design Patterns — Gang of Four",
+      "description": "Creational, structural and behavioural design patterns with C++ and Smalltalk examples. A must-have for software engineers.",
+      "category": "Books",
+      "genre": "Computer Science",
+      "author": "Gamma, Helm, Johnson & Vlissides",
+      "condition": "Good",
+      "rating": 4,
+      "status": "exchanged",
+      "ownerId": "seed_user_004"
+    }
+  ],
+  "requests": [
+    {
+      "id": "mv6um6q8dnmh",
+      "resourceId": "book_001",
+      "requesterId": "mv6g78t4be0s",
+      "ownerId": "seed_user_001",
+      "message": "",
+      "status": "cancelled"
+    }
+  ]
+}
