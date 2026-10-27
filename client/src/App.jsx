@@ -1,411 +1,1076 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "./api.js";
 
-const CATS = ["Books", "Lab accessories", "Study materials", "Other"];
-const GENRES = ["All", "Computer Science", "Mathematics", "Physics", "Chemistry", "Economics", "Business", "Electronics", "Self Help"];
-
-// Maps genre names to CSS class suffixes and emoji icons
-const GENRE_META = {
-  "Computer Science": { cls: "CS",     icon: "💻" },
-  "Mathematics":      { cls: "Math",   icon: "📐" },
-  "Physics":          { cls: "Physics",icon: "⚛️" },
-  "Chemistry":        { cls: "Chem",   icon: "🧪" },
-  "Economics":        { cls: "Econ",   icon: "📊" },
-  "Business":         { cls: "Biz",    icon: "💼" },
-  "Electronics":      { cls: "Elec",   icon: "🔌" },
-  "Self Help":        { cls: "Self",   icon: "🌱" },
+const categories = ["All", "Books", "Lab Accessories", "Study Materials"];
+const blankListing = {
+  title: "",
+  category: "Books",
+  courseCode: "",
+  semester: "Sem 1",
+  condition: "Good",
+  exchangeType: "Temporary Borrow",
+  maxDuration: "14 Days",
+  location: "",
+  description: "",
+  imageUrl: "",
 };
+const Icon = ({ name }) => (
+  <span className="icon" aria-hidden="true">
+    {name === "search"
+      ? "⌕"
+      : name === "plus"
+        ? "+"
+        : name === "close"
+          ? "×"
+          : "·"}
+  </span>
+);
+const human = (s = "") =>
+  s.replaceAll("-", " ").replace(/\b\w/g, (l) => l.toUpperCase());
 
-// Deterministic spine colour based on book id
-const SPINE_COLORS = [
-  ["#1e3a8a","#3b82f6"],["#4c1d95","#a78bfa"],["#064e3b","#34d399"],
-  ["#7c2d12","#fb923c"],["#0c4a6e","#38bdf8"],["#831843","#f472b6"],
-  ["#1c1917","#a78bfa"],["#14532d","#4ade80"],["#713f12","#fbbf24"],
-  ["#1e1b4b","#818cf8"],["#052e16","#86efac"],["#450a0a","#fca5a5"],
-];
-const spineColor = (id) => {
-  const idx = id ? id.charCodeAt(id.length - 1) % SPINE_COLORS.length : 0;
-  return SPINE_COLORS[idx];
-};
-
-const Stars = ({ n }) => "★".repeat(n) + "☆".repeat(5 - n);
-const Tag = ({ s }) => <span className={`tag ${s}`}>{s}</span>;
-
-const GenreBadge = ({ genre }) => {
-  if (!genre) return null;
-  const m = GENRE_META[genre] || { cls: "Other", icon: "📖" };
-  return <span className={`genre-badge genre-${m.cls}`}>{m.icon} {genre}</span>;
-};
-
-const ConditionBadge = ({ c }) => {
-  if (!c) return null;
-  const colors = { "Like New": "#dcfce7", "Good": "#dbeafe", "Fair": "#fef9c3" };
-  return <span className="condition-badge" style={{ background: colors[c] || "#f1f5f9" }}>{c}</span>;
-};
-
-// Book card with coloured spine and rich metadata
-function BookCard({ r, user, onRequest }) {
-  const [spineFrom, spineTo] = spineColor(r.id);
-  const m = GENRE_META[r.genre] || { icon: "📖" };
+function Toast({ toast }) {
   return (
-    <div className="card">
-      <div className="book-card">
-        <div
-          className="book-spine"
-          style={{ background: `linear-gradient(160deg, ${spineFrom} 0%, ${spineTo} 100%)` }}
-          title={r.title}
-        >
-          {m.icon}
+    toast && <div className={`toast ${toast.type || ""}`}>{toast.text}</div>
+  );
+}
+function Modal({ title, children, onClose, wide = false }) {
+  return (
+    <div className="overlay" onMouseDown={onClose}>
+      <section
+        className={`modal ${wide ? "wide" : ""}`}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>{title}</h2>
+          <button className="icon-button" onClick={onClose}>
+            <Icon name="close" />
+          </button>
         </div>
-        <div className="book-body">
-          <h4>
-            {r.title}
-            <Tag s={r.status} />
-          </h4>
-          {r.author && <div className="book-author">by {r.author}</div>}
-          <div className="book-meta">
-            <GenreBadge genre={r.genre} />
-            <ConditionBadge c={r.condition} />
-            {r.rating && (
-              <span className="stars" title={`${r.rating}/5`}>
-                <Stars n={r.rating} />
-              </span>
-            )}
-          </div>
-          <p className="muted" style={{ marginBottom: 8 }}>{r.description}</p>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span className="muted" style={{ fontSize: 13 }}>Offered by <b>{r.owner}</b></span>
-            {user && r.ownerId !== user.id && r.status === "available" && (
-              <button style={{ padding: "5px 12px", fontSize: 13 }} onClick={() => onRequest(r)}>
-                Request exchange
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
+        {children}
+      </section>
     </div>
   );
 }
-
-// Generic resource card (non-book)
-function ResourceCard({ r, user, onRequest }) {
+function Status({ value }) {
+  return <span className={`status ${value}`}>{human(value)}</span>;
+}
+function Field({ label, children }) {
   return (
-    <div className="card">
-      <h4>{r.title} <Tag s={r.status} /></h4>
-      <div className="muted">{r.category} · by {r.owner}</div>
-      <p style={{ marginTop: 6, marginBottom: 8 }}>{r.description}</p>
-      {user && r.ownerId !== user.id && r.status === "available" && (
-        <button onClick={() => onRequest(r)}>Request exchange</button>
+    <label className="field">
+      <span>{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Auth({ onAuth, showToast }) {
+  const [mode, setMode] = useState("login");
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const submit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = await api(
+        `/${mode === "login" ? "login" : "register"}`,
+        "POST",
+        form,
+      );
+      localStorage.setItem("token", data.token);
+      onAuth(data.user);
+    } catch (err) {
+      showToast(err.message, "error");
+    }
+  };
+  const demo = async (email) => {
+    try {
+      const data = await api("/login", "POST", { email, password: "demo123" });
+      localStorage.setItem("token", data.token);
+      onAuth(data.user);
+    } catch {
+      showToast("Demo credentials are unavailable in this data set", "error");
+    }
+  };
+  return (
+    <main className="auth-shell">
+      <section className="auth-card">
+        <div className="brand large">
+          Campus<span>Swap</span>
+        </div>
+        <p>Campus resources, managed with care.</p>
+        <form onSubmit={submit}>
+          {mode === "register" && (
+            <Field label="Full name">
+              <input
+                required
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+              />
+            </Field>
+          )}
+          <Field label="College email">
+            <input
+              required
+              type="email"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              required
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </Field>
+          <button>{mode === "login" ? "Sign in" : "Create account"}</button>
+        </form>
+        <button
+          className="text-button"
+          onClick={() => setMode(mode === "login" ? "register" : "login")}
+        >
+          {mode === "login"
+            ? "Need an account? Sign up"
+            : "Already registered? Sign in"}
+        </button>
+        <div className="demo">
+          <span>Quick demo access</span>
+          <div>
+            <button
+              className="secondary"
+              onClick={() => demo("priya.sharma@campus.edu")}
+            >
+              Priya · owner
+            </button>
+            <button
+              className="secondary"
+              onClick={() => demo("arjun.mehta@campus.edu")}
+            >
+              Arjun · requester
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function ResourceCover({ resource, detail = false }) {
+  const [failed, setFailed] = useState(false);
+  const fallback =
+    resource.category === "Books"
+      ? "BOOK"
+      : resource.category === "Lab Accessories"
+        ? "LAB"
+        : "NOTES";
+  return (
+    <div
+      className={`resource-art ${detail ? "detail-cover" : ""} ${resource.category.replaceAll(" ", "-").toLowerCase()}`}
+    >
+      {resource.imageUrl && !failed && (
+        <img
+          src={resource.imageUrl}
+          alt={`Cover of ${resource.title}`}
+          onError={() => setFailed(true)}
+        />
+      )}
+      {(failed || !resource.imageUrl) && (
+        <div
+          className="cover-fallback"
+          aria-label={`Cover placeholder for ${resource.title}`}
+        >
+          <span>{fallback}</span>
+          <strong>{resource.title}</strong>
+          <small>{resource.author || resource.courseCode}</small>
+        </div>
       )}
     </div>
   );
 }
 
-// ---------- Auth ----------
-function Auth({ onAuth }) {
-  const [mode, setMode] = useState("login");
-  const [f, setF] = useState({ name: "", email: "", password: "" });
-  const [err, setErr] = useState("");
-  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-
-  const submit = async (e) => {
-    e.preventDefault();
-    try {
-      const { token, user } = await api("/" + mode, "POST", f);
-      localStorage.setItem("token", token);
-      onAuth(user);
-    } catch (e) { setErr(e.message); }
-  };
-
+function ResourceCard({ resource, user, onSelect, onRequest }) {
   return (
-    <form className="col" onSubmit={submit}>
-      <h2>CampusSwap</h2>
-      <p className="subtitle">Trade campus resources with fellow students</p>
-      {mode === "register" && <input placeholder="Name" value={f.name} onChange={set("name")} required />}
-      <input placeholder="Email" type="email" value={f.email} onChange={set("email")} required />
-      <input placeholder="Password" type="password" value={f.password} onChange={set("password")} required />
-      <button>{mode === "login" ? "Log in" : "Create account"}</button>
-      <button type="button" className="grey" onClick={() => { setMode(mode === "login" ? "register" : "login"); setErr(""); }}>
-        {mode === "login" ? "New here? Register" : "Have an account? Log in"}
-      </button>
-      {err && <div className="err">{err}</div>}
+    <article className="resource-card" onClick={() => onSelect(resource)}>
+      <ResourceCover resource={resource} />
+      <div className="resource-info">
+        <div className="card-top">
+          <div>
+            <span className="category">{resource.category}</span>
+            <code>{resource.courseCode}</code>
+          </div>
+          <Status value={resource.status} />
+        </div>
+        <h3>{resource.title}</h3>
+        <div className="metadata">
+          <span>{resource.condition}</span>
+          <span>{resource.exchangeType}</span>
+          <span>Up to {resource.maxDuration}</span>
+        </div>
+        <p>{resource.description || "No description provided."}</p>
+        <div className="card-footer">
+          <span>
+            <b>{resource.owner}</b> · {resource.ownerDepartment}
+          </span>
+          <span>{resource.location}</span>
+        </div>
+      </div>
+      {user &&
+        resource.ownerId !== user.id &&
+        resource.status === "available" && (
+          <button
+            className="request-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onRequest(resource);
+            }}
+          >
+            Request
+          </button>
+        )}
+    </article>
+  );
+}
+
+function ListingForm({ initial = blankListing, onSave, onCancel }) {
+  const [f, setF] = useState(initial);
+  const set = (key) => (e) => setF({ ...f, [key]: e.target.value });
+  return (
+    <form
+      className="form-grid"
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(f);
+      }}
+    >
+      <Field label="Title">
+        <input
+          required
+          value={f.title}
+          onChange={set("title")}
+          placeholder="e.g. Database Systems"
+        />
+      </Field>
+      <Field label="Category">
+        <select value={f.category} onChange={set("category")}>
+          <option>Books</option>
+          <option>Lab Accessories</option>
+          <option>Study Materials</option>
+        </select>
+      </Field>
+      <Field label="Course code">
+        <input
+          required
+          value={f.courseCode}
+          onChange={set("courseCode")}
+          placeholder="BCA-402"
+        />
+      </Field>
+      <Field label="Semester">
+        <select value={f.semester} onChange={set("semester")}>
+          {[1, 2, 3, 4, 5, 6].map((n) => (
+            <option key={n}>Sem {n}</option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Condition">
+        <select value={f.condition} onChange={set("condition")}>
+          <option>Like New</option>
+          <option>Good</option>
+          <option>Fair</option>
+        </select>
+      </Field>
+      <Field label="Exchange type">
+        <select value={f.exchangeType} onChange={set("exchangeType")}>
+          <option>Temporary Borrow</option>
+          <option>Item-for-Item Swap</option>
+        </select>
+      </Field>
+      <Field label="Max loan duration">
+        <input
+          value={f.maxDuration}
+          onChange={set("maxDuration")}
+          placeholder="14 Days"
+        />
+      </Field>
+      <Field label="Campus pickup spot">
+        <input
+          required
+          value={f.location}
+          onChange={set("location")}
+          placeholder="CS Block Lab 2"
+        />
+      </Field>
+      <Field label="Image URL (optional)">
+        <input
+          value={f.imageUrl}
+          onChange={set("imageUrl")}
+          placeholder="https://…"
+        />
+      </Field>
+      <Field label="Description">
+        <textarea
+          value={f.description}
+          onChange={set("description")}
+          rows="3"
+        />
+      </Field>
+      <div className="form-actions">
+        <button className="secondary" type="button" onClick={onCancel}>
+          Cancel
+        </button>
+        <button>{initial.id ? "Save changes" : "Post resource"}</button>
+      </div>
     </form>
   );
 }
 
-// ---------- Browse ----------
-function Browse({ user }) {
-  const [items, setItems] = useState([]);
-  const [q, setQ] = useState("");
-  const [category, setCategory] = useState("");
-  const [genre, setGenre] = useState("All");
-  const [msg, setMsg] = useState("");
-
-  const load = () =>
-    api(`/resources?q=${encodeURIComponent(q)}&category=${encodeURIComponent(category)}`).then(setItems);
-  useEffect(() => { load(); }, [q, category]);
-
-  const request = async (r) => {
-    const message = prompt(`Message to ${r.owner} (optional)`) ?? null;
-    if (message === null) return;
-    try {
-      await api("/requests", "POST", { resourceId: r.id, message });
-      setMsg("Request sent successfully!");
-      setTimeout(() => setMsg(""), 3000);
-    } catch (e) { setMsg(e.message); }
-  };
-
-  // client-side genre filter (genre is not a server query param)
-  const visible = items.filter((r) =>
-    genre === "All" || r.genre === genre
+function RequestModal({ resource, mine, onClose, onSave }) {
+  const [f, setF] = useState({
+    duration: "1 week",
+    handover: "Central Library",
+    note: "",
+    offeredResourceId: "",
+    customOffer: "",
+  });
+  return (
+    <Modal title={`Request ${resource.title}`} onClose={onClose}>
+      <form
+        className="stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSave(f);
+        }}
+      >
+        <p className="form-note">
+          Coordinate a clear, respectful handover with {resource.owner}.
+        </p>
+        <Field label="Requested duration">
+          <select
+            value={f.duration}
+            onChange={(e) => setF({ ...f, duration: e.target.value })}
+          >
+            {["3 days", "1 week", "2 weeks", "End of Semester"].map((x) => (
+              <option key={x}>{x}</option>
+            ))}
+          </select>
+        </Field>
+        {resource.exchangeType === "Item-for-Item Swap" && (
+          <>
+            <Field label="Offer one of your listings">
+              <select
+                value={f.offeredResourceId}
+                onChange={(e) =>
+                  setF({ ...f, offeredResourceId: e.target.value })
+                }
+              >
+                <option value="">Choose a listing</option>
+                {mine
+                  .filter((r) => r.status === "available")
+                  .map((r) => (
+                    <option value={r.id} key={r.id}>
+                      {r.title}
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            <Field label="Or describe an offer">
+              <input
+                value={f.customOffer}
+                onChange={(e) => setF({ ...f, customOffer: e.target.value })}
+              />
+            </Field>
+          </>
+        )}
+        <Field label="Preferred handover time / place">
+          <input
+            required
+            value={f.handover}
+            onChange={(e) => setF({ ...f, handover: e.target.value })}
+          />
+        </Field>
+        <Field label="A short note">
+          <textarea
+            value={f.note}
+            onChange={(e) => setF({ ...f, note: e.target.value })}
+            rows="3"
+          />
+        </Field>
+        <div className="form-actions">
+          <button type="button" className="secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button>Send request</button>
+        </div>
+      </form>
+    </Modal>
   );
+}
 
-  const books = visible.filter((r) => r.category === "Books");
-  const others = visible.filter((r) => r.category !== "Books");
-  const booksAvail = books.filter((r) => r.status === "available").length;
-
+function Explore({ user, openLogin, showToast, triggerPost }) {
+  const [resources, setResources] = useState([]),
+    [profile, setProfile] = useState({ resources: [] }),
+    [selected, setSelected] = useState(null),
+    [requesting, setRequesting] = useState(null);
+  const [filters, setFilters] = useState({
+    q: "",
+    category: "All",
+    semester: "",
+    condition: "",
+    exchangeType: "",
+    availableOnly: false,
+    sort: "newest",
+  });
+  const load = () => {
+    const q = new URLSearchParams({
+      q: filters.q,
+      category: filters.category === "All" ? "" : filters.category,
+      semester: filters.semester,
+      condition: filters.condition,
+      exchangeType: filters.exchangeType,
+      availableOnly: String(filters.availableOnly),
+      sort: filters.sort,
+    });
+    api(`/resources?${q}`)
+      .then(setResources)
+      .catch((e) => showToast(e.message, "error"));
+    if (user) api("/profile").then(setProfile);
+  };
+  useEffect(() => {
+    const t = setTimeout(load, 180);
+    return () => clearTimeout(t);
+  }, [filters, user]);
+  const count = (cat) =>
+    cat === "All"
+      ? resources.length
+      : resources.filter((r) => r.category === cat).length;
+  const send = async (data) => {
+    try {
+      await api("/requests", "POST", { ...data, resourceId: requesting.id });
+      setRequesting(null);
+      showToast("Exchange request sent");
+      load();
+    } catch (e) {
+      showToast(e.message, "error");
+    }
+  };
   return (
     <>
-      {/* Hero */}
-      <div className="books-hero">
-        <h2>📚 Campus Book Exchange</h2>
-        <p>Swap textbooks, save money. {booksAvail} books available right now.</p>
+      <div className="workspace-head">
+        <div>
+          <p className="eyebrow">RESOURCE MARKETPLACE</p>
+          <h1>Explore resources</h1>
+          <p>Find what you need from students on campus.</p>
+        </div>
+        <button onClick={user ? triggerPost : openLogin}>
+          <Icon name="plus" /> Post resource
+        </button>
       </div>
-
-      {/* Filter bar */}
-      <div className="filter-bar">
-        <input
-          placeholder="Search by title, author, description…"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <select value={category} onChange={(e) => { setCategory(e.target.value); setGenre("All"); }}>
-          <option value="">All categories</option>
-          {CATS.map((c) => <option key={c}>{c}</option>)}
-        </select>
-      </div>
-
-      {/* Genre chips — only shown when Books is selected or no filter */}
-      {(category === "" || category === "Books") && (
-        <div className="genre-chips">
-          {GENRES.map((g) => (
+      <section className="filter-panel">
+        <div className="search">
+          <Icon name="search" />
+          <input
+            placeholder="Search title, course code, author or pickup spot"
+            value={filters.q}
+            onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+          />
+        </div>
+        <div className="segmented">
+          {categories.map((c) => (
             <button
-              key={g}
-              type="button"
-              className={`chip${genre === g ? " active" : ""}`}
-              onClick={() => setGenre(g)}
+              key={c}
+              className={filters.category === c ? "active" : ""}
+              onClick={() => setFilters({ ...filters, category: c })}
             >
-              {GENRE_META[g]?.icon} {g}
+              {c} <span>{count(c)}</span>
             </button>
           ))}
         </div>
-      )}
-
-      {msg && <div className="notice">{msg}</div>}
-
-      {/* Books section */}
-      {books.length > 0 && (
-        <>
-          <div className="section-head">
-            <h3>Books</h3>
-            <span className="count">{books.length} listing{books.length !== 1 ? "s" : ""}</span>
-          </div>
-          {books.map((r) => (
-            <BookCard key={r.id} r={r} user={user} onRequest={request} />
-          ))}
-        </>
-      )}
-
-      {/* Other resources section */}
-      {others.length > 0 && (
-        <>
-          <div className="section-head">
-            <h3>Other Resources</h3>
-            <span className="count">{others.length}</span>
-          </div>
-          {others.map((r) => (
-            <ResourceCard key={r.id} r={r} user={user} onRequest={request} />
-          ))}
-        </>
-      )}
-
-      {visible.length === 0 && (
-        <div className="empty">
-          <div className="empty-icon">🔍</div>
-          <p>No resources match your search.</p>
-          <p className="muted" style={{ marginTop: 4 }}>Try a different keyword or category.</p>
-        </div>
-      )}
-    </>
-  );
-}
-
-// ---------- My posts ----------
-function MyPosts({ user }) {
-  const empty = { title: "", description: "", category: CATS[0] };
-  const [mine, setMine] = useState([]);
-  const [f, setF] = useState(empty);
-  const [editId, setEditId] = useState(null);
-  const [err, setErr] = useState("");
-
-  const load = () => api("/profile").then((d) => setMine(d.resources));
-  useEffect(() => { load(); }, []);
-
-  const submit = async (e) => {
-    e.preventDefault();
-    try {
-      await (editId ? api(`/resources/${editId}`, "PUT", f) : api("/resources", "POST", f));
-      setF(empty); setEditId(null); setErr(""); load();
-    } catch (e) { setErr(e.message); }
-  };
-  const remove = async (id) => { if (confirm("Delete this listing?")) { await api(`/resources/${id}`, "DELETE"); load(); } };
-  const edit = (r) => { setEditId(r.id); setF({ title: r.title, description: r.description, category: r.category }); };
-
-  return (
-    <>
-      <div className="section-head" style={{ marginBottom: 16 }}>
-        <h3>{editId ? "Edit listing" : "Post a resource"}</h3>
-      </div>
-      <form onSubmit={submit} style={{ flexDirection: "column", background: "#fff", padding: 16, borderRadius: 10, boxShadow: "0 1px 6px rgba(27,36,56,0.07)", marginBottom: 24 }}>
-        <input placeholder="Title (e.g. CLRS Algorithms 4th Ed)" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} required style={{ marginBottom: 8 }} />
-        <input placeholder="Description — condition, edition, highlights…" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} style={{ marginBottom: 8 }} />
-        <div style={{ display: "flex", gap: 8 }}>
-          <select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} style={{ flex: 1 }}>
-            {CATS.map((c) => <option key={c}>{c}</option>)}
+        <div className="filter-row">
+          <select
+            value={filters.semester}
+            onChange={(e) =>
+              setFilters({ ...filters, semester: e.target.value })
+            }
+          >
+            <option value="">All semesters</option>
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <option key={n}>Sem {n}</option>
+            ))}
           </select>
-          <button type="submit">{editId ? "Save changes" : "Post resource"}</button>
-          {editId && <button type="button" className="grey" onClick={() => { setEditId(null); setF(empty); }}>Cancel</button>}
+          <select
+            value={filters.condition}
+            onChange={(e) =>
+              setFilters({ ...filters, condition: e.target.value })
+            }
+          >
+            <option value="">Any condition</option>
+            <option>Like New</option>
+            <option>Good</option>
+            <option>Fair</option>
+          </select>
+          <select
+            value={filters.exchangeType}
+            onChange={(e) =>
+              setFilters({ ...filters, exchangeType: e.target.value })
+            }
+          >
+            <option value="">Any exchange type</option>
+            <option>Temporary Borrow</option>
+            <option>Item-for-Item Swap</option>
+          </select>
+          <label className="toggle">
+            <input
+              type="checkbox"
+              checked={filters.availableOnly}
+              onChange={(e) =>
+                setFilters({ ...filters, availableOnly: e.target.checked })
+              }
+            />{" "}
+            Available only
+          </label>
+          <select
+            value={filters.sort}
+            onChange={(e) => setFilters({ ...filters, sort: e.target.value })}
+          >
+            <option value="newest">Newest first</option>
+            <option value="available">Available first</option>
+            <option value="course">Course code A–Z</option>
+          </select>
         </div>
-      </form>
-      {err && <div className="err">{err}</div>}
-
-      <div className="section-head">
-        <h3>My listings</h3>
-        <span className="count">{mine.length}</span>
+      </section>
+      <div className="results-bar">
+        <span>{resources.length} resources shown</span>
       </div>
-      {mine.length === 0 && (
-        <div className="empty">
-          <div className="empty-icon">📦</div>
-          <p>You haven't posted anything yet.</p>
-        </div>
+      <section className="resource-list">
+        {resources.map((r) => (
+          <ResourceCard
+            key={r.id}
+            resource={r}
+            user={user}
+            onSelect={setSelected}
+            onRequest={(resource) =>
+              user ? setRequesting(resource) : openLogin()
+            }
+          />
+        ))}
+      </section>
+      {!resources.length && (
+        <section className="empty-state">
+          <h2>No matching resources</h2>
+          <p>Try adjusting your filters or search terms.</p>
+          <button
+            className="secondary"
+            onClick={() =>
+              setFilters({
+                q: "",
+                category: "All",
+                semester: "",
+                condition: "",
+                exchangeType: "",
+                availableOnly: false,
+                sort: "newest",
+              })
+            }
+          >
+            Reset all filters
+          </button>
+        </section>
       )}
-      {mine.map((r) => (
-        <div className="card" key={r.id}>
-          <h4>{r.title} <Tag s={r.status} /></h4>
-          <div className="muted">{r.category}</div>
-          <p style={{ marginTop: 6, marginBottom: 10 }}>{r.description}</p>
-          <div className="row">
-            <button className="grey" onClick={() => edit(r)}>Edit</button>
-            <button className="red" onClick={() => remove(r.id)}>Delete</button>
+      {selected && (
+        <Modal title="Resource details" onClose={() => setSelected(null)}>
+          <div className="detail">
+            <ResourceCover resource={selected} detail />
+            <Status value={selected.status} />
+            <h1>{selected.title}</h1>
+            <p>{selected.description}</p>
+            <dl>
+              <dt>Course</dt>
+              <dd>
+                <code>{selected.courseCode}</code> · {selected.semester}
+              </dd>
+              <dt>Exchange</dt>
+              <dd>
+                {selected.exchangeType} · up to {selected.maxDuration}
+              </dd>
+              <dt>Pickup</dt>
+              <dd>{selected.location}</dd>
+              <dt>Owner</dt>
+              <dd>
+                {selected.owner}, {selected.ownerDepartment}
+              </dd>
+            </dl>
+            {user &&
+              selected.ownerId !== user.id &&
+              selected.status === "available" && (
+                <button
+                  onClick={() => {
+                    setSelected(null);
+                    setRequesting(selected);
+                  }}
+                >
+                  Request exchange
+                </button>
+              )}
           </div>
-        </div>
-      ))}
+        </Modal>
+      )}
+      {requesting && (
+        <RequestModal
+          resource={requesting}
+          mine={profile.resources}
+          onClose={() => setRequesting(null)}
+          onSave={send}
+        />
+      )}
     </>
   );
 }
 
-// ---------- Requests ----------
-function Requests() {
+function Requests({ showToast }) {
   const [data, setData] = useState({ incoming: [], outgoing: [] });
+  const [tab, setTab] = useState("incoming");
   const load = () => api("/requests").then(setData);
-  useEffect(() => { load(); }, []);
-  const act = async (id, status) => { await api(`/requests/${id}`, "PATCH", { status }); load(); };
-
+  useEffect(() => {
+    load();
+  }, []);
+  const act = async (id, status) => {
+    try {
+      await api(`/requests/${id}`, "PATCH", { status });
+      showToast(`Request ${human(status)}`);
+      load();
+    } catch (e) {
+      showToast(e.message, "error");
+    }
+  };
+  const items = data[tab];
+  const next = {
+    pending: ["approved", "declined"],
+    approved: ["on-loan"],
+    "on-loan": ["returned"],
+  };
   return (
     <>
-      <div className="section-head">
-        <h3>Received</h3>
-        <span className="count">{data.incoming.length}</span>
-      </div>
-      {data.incoming.length === 0 && <div className="empty"><div className="empty-icon">📭</div><p>No requests received.</p></div>}
-      {data.incoming.map((r) => (
-        <div className="card" key={r.id}>
-          <h4><b>{r.requester}</b> wants <b>{r.resource}</b> <Tag s={r.status} /></h4>
-          {r.message && <p className="muted" style={{ marginTop: 4 }}>"{r.message}"</p>}
-          {r.status === "pending" && (
-            <div className="row" style={{ marginTop: 10 }}>
-              <button className="green" onClick={() => act(r.id, "accepted")}>Accept</button>
-              <button className="red" onClick={() => act(r.id, "rejected")}>Reject</button>
-            </div>
-          )}
+      <div className="workspace-head">
+        <div>
+          <p className="eyebrow">EXCHANGE OPERATIONS</p>
+          <h1>Request center</h1>
+          <p>Keep every handover transparent and on track.</p>
         </div>
-      ))}
-
-      <div className="section-head" style={{ marginTop: 8 }}>
-        <h3>Sent</h3>
-        <span className="count">{data.outgoing.length}</span>
       </div>
-      {data.outgoing.length === 0 && <div className="empty"><div className="empty-icon">📬</div><p>You haven't requested anything.</p></div>}
-      {data.outgoing.map((r) => (
-        <div className="card" key={r.id}>
-          <h4><b>{r.resource}</b> from {r.owner} <Tag s={r.status} /></h4>
-          {r.status === "pending" && (
-            <div className="row" style={{ marginTop: 10 }}>
-              <button className="grey" onClick={() => act(r.id, "cancelled")}>Cancel</button>
+      <div className="request-tabs">
+        <button
+          className={tab === "incoming" ? "active" : ""}
+          onClick={() => setTab("incoming")}
+        >
+          Incoming <span>{data.incoming.length}</span>
+        </button>
+        <button
+          className={tab === "outgoing" ? "active" : ""}
+          onClick={() => setTab("outgoing")}
+        >
+          Outgoing <span>{data.outgoing.length}</span>
+        </button>
+      </div>
+      <section className="request-list">
+        {items.map((r) => (
+          <article className="request-card" key={r.id}>
+            <div>
+              <Status value={r.status} />
+              <h3>{r.resource.title}</h3>
+              <p>
+                {tab === "incoming"
+                  ? `${r.requester.name} · ${r.requester.department}`
+                  : `Owner: ${r.owner.name}`}
+              </p>
+              <p className="request-note">
+                {r.duration} · {r.handover}
+                {r.note ? ` · “${r.note}”` : ""}
+              </p>
+              {r.offeredResource && (
+                <p className="offer">Offer: {r.offeredResource.title}</p>
+              )}
             </div>
-          )}
-        </div>
-      ))}
+            <div className="request-actions">
+              {tab === "incoming" &&
+                next[r.status]?.map((s) => (
+                  <button
+                    key={s}
+                    className={s === "declined" ? "danger" : ""}
+                    onClick={() => act(r.id, s)}
+                  >
+                    {s === "approved"
+                      ? "Approve"
+                      : s === "on-loan"
+                        ? "Mark handed over"
+                        : s === "returned"
+                          ? "Mark returned"
+                          : "Decline"}
+                  </button>
+                ))}
+              {tab === "outgoing" && r.status === "pending" && (
+                <button
+                  className="secondary"
+                  onClick={() => act(r.id, "cancelled")}
+                >
+                  Cancel request
+                </button>
+              )}
+            </div>
+          </article>
+        ))}
+        {!items.length && (
+          <div className="empty-state">
+            <h2>No {tab} requests</h2>
+            <p>Requests will appear here when exchange activity starts.</p>
+          </div>
+        )}
+      </section>
     </>
   );
 }
 
-// ---------- Profile ----------
-function Profile({ user, setUser }) {
-  const [f, setF] = useState({ name: user.name, bio: user.bio || "" });
-  const [saved, setSaved] = useState(false);
+function Listings({ showToast }) {
+  const [data, setData] = useState({ resources: [] });
+  const [editor, setEditor] = useState(null),
+    [remove, setRemove] = useState(null);
+  const load = () => api("/profile").then(setData);
+  useEffect(() => {
+    load();
+  }, []);
+  const save = async (f) => {
+    try {
+      await api(
+        editor?.id ? `/resources/${editor.id}` : "/resources",
+        editor?.id ? "PUT" : "POST",
+        f,
+      );
+      showToast(editor?.id ? "Listing updated" : "Resource posted");
+      setEditor(null);
+      load();
+    } catch (e) {
+      showToast(e.message, "error");
+    }
+  };
+  const toggle = async (r) => {
+    await api(`/resources/${r.id}`, "PUT", {
+      ...r,
+      status: r.status === "available" ? "reserved" : "available",
+    });
+    load();
+  };
+  return (
+    <>
+      <div className="workspace-head">
+        <div>
+          <p className="eyebrow">YOUR INVENTORY</p>
+          <h1>My listings</h1>
+          <p>Manage each resource and its availability.</p>
+        </div>
+        <button onClick={() => setEditor(blankListing)}>
+          <Icon name="plus" /> Post resource
+        </button>
+      </div>
+      <section className="resource-list">
+        {data.resources.map((r) => (
+          <article className="listing-row" key={r.id}>
+            <div>
+              <Status value={r.status} />
+              <h3>{r.title}</h3>
+              <code>{r.courseCode}</code>
+            </div>
+            <div>
+              <button className="secondary" onClick={() => toggle(r)}>
+                {r.status === "available" ? "Pause" : "Make available"}
+              </button>
+              <button className="secondary" onClick={() => setEditor(r)}>
+                Edit
+              </button>
+              <button className="danger" onClick={() => setRemove(r)}>
+                Delete
+              </button>
+            </div>
+          </article>
+        ))}
+        {!data.resources.length && (
+          <div className="empty-state">
+            <h2>No listings yet</h2>
+            <p>Post something useful to your campus community.</p>
+          </div>
+        )}
+      </section>
+      {editor && (
+        <Modal
+          title={editor.id ? "Edit resource" : "Post a resource"}
+          onClose={() => setEditor(null)}
+          wide
+        >
+          <ListingForm
+            initial={editor}
+            onSave={save}
+            onCancel={() => setEditor(null)}
+          />
+        </Modal>
+      )}
+      {remove && (
+        <Modal title="Delete this listing?" onClose={() => setRemove(null)}>
+          <p className="form-note">
+            This cannot be undone. Active requests must be resolved first.
+          </p>
+          <div className="form-actions">
+            <button className="secondary" onClick={() => setRemove(null)}>
+              Keep listing
+            </button>
+            <button
+              className="danger"
+              onClick={async () => {
+                try {
+                  await api(`/resources/${remove.id}`, "DELETE");
+                  setRemove(null);
+                  load();
+                  showToast("Listing deleted");
+                } catch (e) {
+                  showToast(e.message, "error");
+                }
+              }}
+            >
+              Delete listing
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
+function Profile({ user, onUser, showToast }) {
+  const [form, setForm] = useState(user);
+  const [data, setData] = useState({ resources: [], requests: [] });
+  useEffect(() => {
+    api("/profile").then(setData);
+  }, []);
+  const active = data.requests.filter((r) =>
+      ["approved", "on-loan"].includes(r.status),
+    ).length,
+    complete = data.requests.filter((r) => r.status === "returned").length;
   const save = async (e) => {
     e.preventDefault();
-    setUser(await api("/profile", "PUT", f));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+    try {
+      const next = await api("/profile", "PUT", form);
+      onUser(next);
+      showToast("Profile saved");
+    } catch (err) {
+      showToast(err.message, "error");
+    }
   };
   return (
-    <form className="col" onSubmit={save} style={{ margin: "24px auto" }}>
-      <h2 style={{ marginBottom: 4 }}>Profile</h2>
-      <p className="subtitle">{user.email}</p>
-      <input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="Name" />
-      <textarea rows="3" value={f.bio} onChange={(e) => setF({ ...f, bio: e.target.value })} placeholder="Short bio (course, year…)" />
-      <button>Save profile</button>
-      {saved && <div className="notice">Profile saved!</div>}
-    </form>
+    <>
+      <div className="workspace-head">
+        <div>
+          <p className="eyebrow">STUDENT CREDIBILITY</p>
+          <h1>Profile</h1>
+          <p>Keep your exchange details current.</p>
+        </div>
+      </div>
+      <div className="metrics">
+        <div>
+          <b>{data.resources.length}</b>
+          <span>Resources listed</span>
+        </div>
+        <div>
+          <b>{active}</b>
+          <span>Active loans</span>
+        </div>
+        <div>
+          <b>{complete}</b>
+          <span>Completed exchanges</span>
+        </div>
+      </div>
+      <form className="profile-form" onSubmit={save}>
+        <div className="profile-photo-field">
+          {form.photoUrl ? (
+            <img
+              src={form.photoUrl}
+              alt={`${form.name || "Student"}'s profile`}
+            />
+          ) : (
+            <span>{(form.name || "C").slice(0, 1).toUpperCase()}</span>
+          )}
+          <Field label="Profile photo URL">
+            <input
+              type="url"
+              placeholder="https://example.com/photo.jpg"
+              value={form.photoUrl || ""}
+              onChange={(e) => setForm({ ...form, photoUrl: e.target.value })}
+            />
+          </Field>
+        </div>
+        <Field label="Full name">
+          <input
+            value={form.name || ""}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+        </Field>
+        <Field label="College roll number / USN">
+          <input
+            className="mono"
+            value={form.rollNumber || ""}
+            onChange={(e) => setForm({ ...form, rollNumber: e.target.value })}
+          />
+        </Field>
+        <Field label="Department">
+          <input
+            value={form.department || ""}
+            onChange={(e) => setForm({ ...form, department: e.target.value })}
+          />
+        </Field>
+        <Field label="Current semester">
+          <select
+            value={form.semester || "Sem 1"}
+            onChange={(e) => setForm({ ...form, semester: e.target.value })}
+          >
+            {[1, 2, 3, 4, 5, 6].map((n) => (
+              <option key={n}>Sem {n}</option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Default pickup preference">
+          <input
+            value={form.pickupPreference || ""}
+            onChange={(e) =>
+              setForm({ ...form, pickupPreference: e.target.value })
+            }
+          />
+        </Field>
+        <Field label="Bio">
+          <textarea
+            rows="3"
+            value={form.bio || ""}
+            onChange={(e) => setForm({ ...form, bio: e.target.value })}
+          />
+        </Field>
+        <button>Save profile</button>
+      </form>
+    </>
   );
 }
 
-// ---------- App ----------
 export default function App() {
-  const [user, setUser] = useState(null);
-  const [tab, setTab] = useState("browse");
-  const [ready, setReady] = useState(false);
-
+  const [user, setUser] = useState(null),
+    [ready, setReady] = useState(false),
+    [tab, setTab] = useState("explore"),
+    [toast, setToast] = useState(null),
+    [authOpen, setAuthOpen] = useState(false);
+  const showToast = (text, type) => {
+    setToast({ text, type });
+    setTimeout(() => setToast(null), 3500);
+  };
   useEffect(() => {
     if (!localStorage.getItem("token")) return setReady(true);
-    api("/profile").then((d) => setUser(d.user)).catch(() => localStorage.removeItem("token")).finally(() => setReady(true));
+    api("/profile")
+      .then((d) => setUser(d.user))
+      .catch(() => localStorage.removeItem("token"))
+      .finally(() => setReady(true));
   }, []);
-
-  if (!ready) return null;
-  if (!user) return <Auth onAuth={setUser} />;
-
-  const logout = () => { localStorage.removeItem("token"); setUser(null); };
-  const tabs = { browse: "Browse", posts: "My Posts", requests: "Requests", profile: "Profile" };
-
+  if (!ready) return <div className="loading">Loading CampusSwap…</div>;
+  if (!user)
+    return (
+      <>
+        <header>
+          <div className="topbar">
+            <button className="brand">
+              Campus<span>Swap</span>
+            </button>
+            <div className="user-menu">
+              <button className="secondary" onClick={() => setAuthOpen(true)}>
+                Sign in
+              </button>
+            </div>
+          </div>
+        </header>
+        <main className="app-shell">
+          <Explore
+            user={null}
+            openLogin={() => setAuthOpen(true)}
+            showToast={showToast}
+            triggerPost={() => setAuthOpen(true)}
+          />
+        </main>
+        {authOpen && (
+          <Modal
+            title="Welcome to CampusSwap"
+            onClose={() => setAuthOpen(false)}
+          >
+            <Auth
+              onAuth={(next) => {
+                setUser(next);
+                setAuthOpen(false);
+              }}
+              showToast={showToast}
+            />
+          </Modal>
+        )}
+        <Toast toast={toast} />
+      </>
+    );
+  const nav = [
+    ["explore", "Explore resources"],
+    ["requests", "Request center"],
+    ["listings", "My listings"],
+    ["profile", "Profile"],
+  ];
+  const logout = () => {
+    localStorage.removeItem("token");
+    setUser(null);
+    setTab("explore");
+  };
   return (
     <>
-      <nav>
-        <div className="wrap">
-          <span className="brand">Campus<span>Swap</span></span>
-          {Object.entries(tabs).map(([k, v]) => (
-            <button key={k} className={`ghost${tab === k ? " on" : ""}`} onClick={() => setTab(k)}>{v}</button>
-          ))}
-          <button className="ghost" onClick={logout} style={{ opacity: 0.7 }}>Log out ({user.name})</button>
+      <header>
+        <div className="topbar">
+          <button className="brand" onClick={() => setTab("explore")}>
+            Campus<span>Swap</span>
+          </button>
+          <nav>
+            {nav.map(([id, label]) => (
+              <button
+                key={id}
+                className={tab === id ? "active" : ""}
+                onClick={() => setTab(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+          <div className="user-menu">
+            {user.photoUrl ? (
+              <img className="nav-avatar" src={user.photoUrl} alt="" />
+            ) : (
+              <span className="nav-avatar initial">
+                {user.name.slice(0, 1)}
+              </span>
+            )}
+            <span>{user.name}</span>
+            <button className="secondary" onClick={logout}>
+              Sign out
+            </button>
+          </div>
         </div>
-      </nav>
-      <div className="wrap">
-        {tab === "browse"   && <Browse user={user} />}
-        {tab === "posts"    && <MyPosts user={user} />}
-        {tab === "requests" && <Requests />}
-        {tab === "profile"  && <Profile user={user} setUser={setUser} />}
-      </div>
+      </header>
+      <main className="app-shell">
+        {tab === "explore" && (
+          <Explore
+            user={user}
+            openLogin={() => setAuthOpen(true)}
+            showToast={showToast}
+            triggerPost={() => setTab("listings")}
+          />
+        )}
+        {tab === "requests" && <Requests showToast={showToast} />}
+        {tab === "listings" && <Listings showToast={showToast} />}
+        {tab === "profile" && (
+          <Profile user={user} onUser={setUser} showToast={showToast} />
+        )}
+      </main>
+      <Toast toast={toast} />
     </>
   );
 }
